@@ -1,6 +1,7 @@
 package sectimeline
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -76,9 +77,13 @@ func runStart(cmd *cobra.Command, args []string) error {
 	var httpServer *http.Server
 	if cfg.EnableHTTP {
 		mux := http.NewServeMux()
-		setupHTTPHandlers(mux, store, coll)
+		setupHTTPHandlers(mux, store, coll, cfg.HTTPToken)
+		bind := cfg.HTTPBind
+		if bind == "" {
+			bind = "127.0.0.1"
+		}
 		httpServer = &http.Server{
-			Addr:    fmt.Sprintf(":%d", cfg.HTTPPort),
+			Addr:    fmt.Sprintf("%s:%d", bind, cfg.HTTPPort),
 			Handler: mux,
 		}
 		go func() {
@@ -156,7 +161,18 @@ func runStart(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func setupHTTPHandlers(mux *http.ServeMux, store *storage.Storage, coll *collector.Collector) {
+func setupHTTPHandlers(mux *http.ServeMux, store *storage.Storage, coll *collector.Collector, token string) {
+	protected := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			provided := r.Header.Get("Authorization")
+			const prefix = "Bearer "
+			if len(provided) <= len(prefix) || provided[:len(prefix)] != prefix || token == "" || subtle.ConstantTimeCompare([]byte(provided[len(prefix):]), []byte(token)) != 1 {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			next(w, r)
+		}
+	}
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 	})
@@ -170,7 +186,7 @@ func setupHTTPHandlers(mux *http.ServeMux, store *storage.Storage, coll *collect
 		})
 	})
 
-	mux.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/events", protected(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		// Parse query parameters
@@ -190,17 +206,17 @@ func setupHTTPHandlers(mux *http.ServeMux, store *storage.Storage, coll *collect
 
 		events := store.GetEvents(since, until)
 		json.NewEncoder(w).Encode(events)
-	})
+	}))
 
-	mux.HandleFunc("/timeline", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/timeline", protected(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		events := store.GetAllEvents()
 		tl := timeline.NewTimeline(events)
 		json.NewEncoder(w).Encode(tl)
-	})
+	}))
 
-	mux.HandleFunc("/query", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/query", protected(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		query := r.URL.Query().Get("q")
@@ -218,17 +234,17 @@ func setupHTTPHandlers(mux *http.ServeMux, store *storage.Storage, coll *collect
 			"response": response,
 			"events":   result.Events,
 		})
-	})
+	}))
 
-	mux.HandleFunc("/summary", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/summary", protected(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		events := store.GetAllEvents()
 		tl := timeline.NewTimeline(events)
 		json.NewEncoder(w).Encode(tl.Summary)
-	})
+	}))
 
-	mux.HandleFunc("/collect", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/collect", protected(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -249,7 +265,7 @@ func setupHTTPHandlers(mux *http.ServeMux, store *storage.Storage, coll *collect
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"collected": len(events),
 		})
-	})
+	}))
 }
 
 func runStop(cmd *cobra.Command, args []string) error {

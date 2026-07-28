@@ -10,12 +10,14 @@ import (
 
 // Config holds application configuration
 type Config struct {
-	DataDir       string        `yaml:"data_dir"`
+	DataDir         string        `yaml:"data_dir"`
 	CollectInterval time.Duration `yaml:"collect_interval"`
-	RetentionDays int           `yaml:"retention_days"`
-	HTTPPort      int           `yaml:"http_port"`
-	EnableHTTP    bool          `yaml:"enable_http"`
-	LogLevel      string        `yaml:"log_level"`
+	RetentionDays   int           `yaml:"retention_days"`
+	HTTPPort        int           `yaml:"http_port"`
+	HTTPBind        string        `yaml:"http_bind"`
+	HTTPToken       string        `yaml:"http_token"`
+	EnableHTTP      bool          `yaml:"enable_http"`
+	LogLevel        string        `yaml:"log_level"`
 }
 
 // DefaultConfig returns the default configuration
@@ -26,7 +28,8 @@ func DefaultConfig() *Config {
 		CollectInterval: 5 * time.Minute,
 		RetentionDays:   90,
 		HTTPPort:        9012,
-		EnableHTTP:      true,
+		HTTPBind:        "127.0.0.1",
+		EnableHTTP:      false,
 		LogLevel:        "info",
 	}
 }
