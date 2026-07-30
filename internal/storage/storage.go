@@ -18,8 +18,11 @@ type Storage struct {
 
 // NewStorage creates a new storage instance
 func NewStorage(dataDir string) (*Storage, error) {
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
+	}
+	if err := os.Chmod(dataDir, 0700); err != nil {
+		return nil, fmt.Errorf("failed to secure data directory: %w", err)
 	}
 
 	s := &Storage{
@@ -77,8 +80,11 @@ func (s *Storage) Save() error {
 			return fmt.Errorf("failed to marshal events: %w", err)
 		}
 
-		if err := os.WriteFile(filename, data, 0644); err != nil {
+		if err := os.WriteFile(filename, data, 0600); err != nil {
 			return fmt.Errorf("failed to write events file: %w", err)
+		}
+		if err := os.Chmod(filename, 0600); err != nil {
+			return fmt.Errorf("failed to secure events file: %w", err)
 		}
 	}
 
@@ -199,7 +205,10 @@ func (s *Storage) Export(path string) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0600)
 }
 
 // Import imports events from a JSON file

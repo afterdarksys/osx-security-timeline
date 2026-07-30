@@ -143,7 +143,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 		fmt.Printf("HTTP API: http://localhost:%d\n", cfg.HTTPPort)
 
 		pidFile := os.ExpandEnv("$HOME/.config/sectimeline/sectimeline.pid")
-		if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0644); err != nil {
+		if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", os.Getpid())), 0600); err != nil {
 			log.Printf("Warning: failed to write PID file: %v", err)
 		}
 
